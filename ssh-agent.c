@@ -1269,6 +1269,7 @@ main(int ac, char **av)
 				break;
 			}
 			group_id = grp->gr_gid;
+			break;
 		default:
 			usage();
 		}
