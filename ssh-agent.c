@@ -38,6 +38,7 @@
 
 #include <sys/types.h>
 #include <sys/param.h>
+#include <grp.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
@@ -148,6 +149,9 @@ pid_t cleanup_pid = 0;
 /* pathname and directory for AUTH_SOCKET */
 char socket_name[PATH_MAX];
 char socket_dir[PATH_MAX];
+
+/* Accepted group */
+gid_t group_id = 0;
 
 /* PKCS#11/Security key path whitelist */
 static char *provider_whitelist;
@@ -928,9 +932,10 @@ handle_socket_read(u_int socknum)
 		close(fd);
 		return -1;
 	}
-	if ((euid != 0) && (getuid() != euid)) {
-		error("uid mismatch: peer euid %u != uid %u",
-		    (u_int) euid, (u_int) getuid());
+	
+	if (((euid != 0) && (getuid() != euid)) && ((group_id == 0) || (group_id != egid))) {
+		error("uid/gid mismatch: peer euid %u != uid %u || peer egid %u != gid %u",
+		    (u_int) euid, (u_int) getuid(),egid,group_id);
 		close(fd);
 		return -1;
 	}
@@ -1195,6 +1200,7 @@ main(int ac, char **av)
 	struct pollfd *pfd = NULL;
 	size_t npfd = 0;
 	u_int maxfds;
+	struct group* grp;
 
 	/* Ensure that fds 0, 1 and 2 are open or directed to /dev/null */
 	sanitise_stdfd();
@@ -1213,7 +1219,7 @@ main(int ac, char **av)
 	__progname = ssh_get_progname(av[0]);
 	seed_rng();
 
-	while ((ch = getopt(ac, av, "cDdksE:a:P:t:")) != -1) {
+	while ((ch = getopt(ac, av, "cDdksE:a:P:t:g:")) != -1) {
 		switch (ch) {
 		case 'E':
 			fingerprint_hash = ssh_digest_alg_by_name(optarg);
@@ -1257,6 +1263,12 @@ main(int ac, char **av)
 				usage();
 			}
 			break;
+		case 'g':
+			if( ( grp = getgrnam( optarg ) ) == NULL ) {
+				fprintf(stderr, "Invalid group name\n");
+				break;
+			}
+			group_id = grp->gr_gid;
 		default:
 			usage();
 		}
